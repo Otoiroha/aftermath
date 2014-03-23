@@ -60,7 +60,7 @@ windower.register_event('addon command', function(...)
     Mythic = 'M'
     Empy = 'E'
 2. aftermath delete -- delete timers. please call this when aftermath is removed.
-3. aftermath help -- print this massage.]]
+3. aftermath help -- print this message.]]
             for _, line in ipairs(helptext:split('\n')) do
                 windower.add_to_chat(207, line..chat.controls.reset)
             end
