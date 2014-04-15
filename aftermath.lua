@@ -88,17 +88,22 @@ windower.register_event('addon command', function(...)
             end
 
             -- determine aftermath level
-            if tp < 100 then
-                return
-            elseif tp < 200 then
+            if w_type == 'R' then
                 am_level = 1
                 icon = 'spells/00033.png'
-            elseif tp < 300 then
-                am_level = 2
-                icon = 'spells/00034.png'
             else
-                am_level = 3
-                icon = 'spells/00035.png'
+                if tp < 100 then
+                    return
+                elseif tp < 200 then
+                    am_level = 1
+                    icon = 'spells/00033.png'
+                elseif tp < 300 then
+                    am_level = 2
+                    icon = 'spells/00034.png'
+                else
+                    am_level = 3
+                    icon = 'spells/00035.png'
+                end
             end
 
             -- check now have AMs
@@ -117,7 +122,7 @@ windower.register_event('addon command', function(...)
             -- register timers
             if present then
                 -- when have AMs
-                if lasttp < tp then
+                if lasttp < tp or w_type == 'R' then
                     windower.send_command('timers create AM' .. am_level .. ' ' .. duration .. ' down ' .. icon)
                     lasttp = tp
                     for i = am_level, 1 , -1 do
