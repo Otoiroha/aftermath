@@ -27,26 +27,28 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ]]
 
 _addon.name = 'aftermath'
-_addon.version = '0.1'
+_addon.version = '0.2'
 _addon.author = 'kotodamage'
 _addon.command = 'aftermath'
 
 chat = require('chat')
 
 -- global variables
-lasttp = 0
+g_last_tp = 0
+g_last_limit = 0
 
 windower.register_event('addon command', function(...)
     local args = {...}
     local comm
     local helptext
     local player
-    local tp
+    local present_tp
     local duration
     local w_type
-    local am_level
+    local next_am
     local icon
-    local present = nil
+    local available_am = nil
+    local left_time = 0
 
     if args[1] ~= nil then
         comm = args[1]:lower()
@@ -69,39 +71,39 @@ windower.register_event('addon command', function(...)
             -- aftermath register
             -- get player status
             player = windower.ffxi.get_player()
-            tp = player.vitals.tp
+            present_tp = player.vitals.tp
 
             -- get weapon type
             w_type = args[2]
             if w_type == 'R' then
-                duration = math.floor(tp * 0.2)
+                duration = math.floor(present_tp * 0.2)
             elseif w_type == 'M' then
-                duration = math.floor(tp * 0.6)
+                duration = math.floor(present_tp * 0.6)
             elseif w_type == 'E' then
-                duration = math.floor(tp * 0.3)
+                duration = math.floor(present_tp * 0.3)
             else
                 windower.add_to_chat(
-                207,
-                '[aftermath] Please specify weapon type. e.g) aftermath register R' .. chat.controls.reset
+                    207,
+                    '[aftermath] Please specify weapon type. e.g) aftermath register R' .. chat.controls.reset
                 )
                 return
             end
 
             -- determine aftermath level
-            if w_type == 'R' then
-                am_level = 1
-                icon = 'spells/00033.png'
+            if present_tp < 100 then
+                return
             else
-                if tp < 100 then
-                    return
-                elseif tp < 200 then
-                    am_level = 1
+                if w_type == 'R' then
+                    next_am = 1
                     icon = 'spells/00033.png'
-                elseif tp < 300 then
-                    am_level = 2
+                elseif present_tp < 200 then
+                    next_am = 1
+                    icon = 'spells/00033.png'
+                elseif present_tp < 300 then
+                    next_am = 2
                     icon = 'spells/00034.png'
                 else
-                    am_level = 3
+                    next_am = 3
                     icon = 'spells/00035.png'
                 end
             end
@@ -109,39 +111,80 @@ windower.register_event('addon command', function(...)
             -- check now have AMs
             for key,value in pairs(player.buffs) do
                 if value == 270 then
-                    present = 1
+                    available_am = 1
                 elseif value == 271 then
-                    present = 2
+                    available_am = 2
                 elseif value == 272 then
-                    present = 3
+                    available_am = 3
                 elseif value == 273 then
-                    present = 1
+                    available_am = 1
                 end
             end
 
-            -- register timers
-            if present then
-                -- when have AMs
-                if lasttp < tp or w_type == 'R' then
-                    windower.send_command('timers create AM' .. am_level .. ' ' .. duration .. ' down ' .. icon)
-                    lasttp = tp
-                    for i = am_level, 1 , -1 do
-                        windower.send_command('timers delete AM' .. i)
+            -- タイマー登録
+            if available_am then
+                -- 前回AMが有効な場合
+                -- 前回AMの残時間を計算
+                left_time = g_last_limit - os.clock()
+                if w_type == 'R' then
+                    -- レリックの場合、常に残時間と比較する
+                    if left_time < duration then
+                        registerTimer(next_am, present_tp, duration, icon)
+                    end
+
+                elseif w_type == 'M' then
+                    -- ミシックの場合
+                    if available_am == 1 and next_am == 1 then
+                        -- 前後ともにAM1の場合、残時間と比較する
+                        if left_time < duration then
+                            registerTimer(next_am, present_tp, duration, icon)
+                        end
+                    elseif available_am == 2 and next_am == 2 then
+                        -- 前後ともにAM2の場合、発動時TPと比較する
+                        if g_last_tp < present_tp then
+                            registerTimer(next_am, present_tp, duration, icon)
+                        end
+                    elseif available_am < next_am then
+                        -- 前回AMよりもLvが高い場合登録
+                        registerTimer(next_am, present_tp, duration, icon)
+                        deleteTimers(next_am - 1)
+                    end
+
+                elseif w_type == 'E' then
+                    -- エンピの場合
+                    if available_am == next_am then
+                        -- 前後のAMが同じ場合、残時間と比較する
+                        if left_time < duration then
+                            registerTimer(next_am, present_tp, duration, icon)
+                        end
+                    elseif available_am < next_am then
+                        -- 前回AMよりもLvが高い場合登録
+                        registerTimer(next_am, present_tp, duration, icon)
+                        deleteTimers(next_am - 1)
                     end
                 end
+
             else
-                -- when dont have AMs
-                windower.send_command('timers create AM' .. am_level .. ' ' .. duration .. ' down ' .. icon)
-                lasttp = tp
+                -- AM効果がない場合登録
+                registerTimer(next_am, present_tp, duration, icon)
             end
 
         elseif comm == 'delete' then
             -- aftermath delete
-            for i = 3, 1 , -1 do
-                windower.send_command('timers delete AM' .. i)
-            end
-            lasttp = 0
+            deleteTimers(3)
+            g_last_tp = 0
         end
     end
 end)
 
+function registerTimer(next_am, present_tp, duration, icon)
+    windower.send_command('timers create AM' .. next_am .. ' ' .. duration .. ' down ' .. icon)
+    g_last_limit = os.clock() + duration
+    g_last_tp = present_tp
+end
+
+function deleteTimers(start_with)
+    for i = start_with, 1 , -1 do
+        windower.send_command('timers delete AM' .. i)
+    end
+end
