@@ -71,7 +71,7 @@ windower.register_event('addon command', function(...)
             -- aftermath register
             -- get player status
             player = windower.ffxi.get_player()
-            present_tp = player.vitals.tp
+            present_tp = math.floor(player.vitals.tp / 10)
 
             -- get weapon type
             w_type = args[2]
