@@ -71,16 +71,19 @@ windower.register_event('addon command', function(...)
       -- aftermath register
       -- get player status
       player = windower.ffxi.get_player()
-      present_tp = math.floor(player.vitals.tp / 10)
+      present_tp = args[3] or player.vitals.tp
+      present_tp = math.floor(present_tp / 10)
 
       -- get weapon type
       w_type = args[2]
       if w_type == 'R' then
         duration = math.floor(present_tp * 0.2)
-      elseif w_type == 'M' then
+      elseif w_type == 'R+' or w_type == 'M' or w_type == 'M+' or w_type == 'E+' then
         duration = math.floor(present_tp * 0.6)
       elseif w_type == 'E' then
         duration = math.floor(present_tp * 0.3)
+      elseif w_type == 'A' then
+        duration = 180
       else
         windower.add_to_chat(
         207,
@@ -93,7 +96,7 @@ windower.register_event('addon command', function(...)
       if present_tp < 100 then
         return
       else
-        if w_type == 'R' then
+        if w_type == 'R' or w_type == 'R+' then
           next_am = 1
           icon = 'spells/00033.png'
         elseif present_tp < 200 then
@@ -126,13 +129,13 @@ windower.register_event('addon command', function(...)
         -- 前回AMが有効な場合
         -- 前回AMの残時間を計算
         left_time = g_last_limit - os.clock()
-        if w_type == 'R' then
+        if w_type == 'R' or w_type == 'R+' then
           -- レリックの場合、常に残時間と比較する
           if left_time < duration then
             registerTimer(next_am, present_tp, duration, icon)
           end
 
-        elseif w_type == 'M' then
+        elseif w_type == 'M' or w_type == 'M+' then
           -- ミシックの場合
           if available_am == 1 and next_am == 1 then
             -- 前後ともにAM1の場合、残時間と比較する
@@ -150,11 +153,29 @@ windower.register_event('addon command', function(...)
             deleteTimers(next_am - 1)
           end
 
-        elseif w_type == 'E' then
+        elseif w_type == 'E' or w_type == 'E+' then
           -- エンピの場合
           if available_am == next_am then
             -- 前後のAMが同じ場合、残時間と比較する
             if left_time < duration then
+              registerTimer(next_am, present_tp, duration, icon)
+            end
+          elseif available_am < next_am then
+            -- 前回AMよりもLvが高い場合登録
+            registerTimer(next_am, present_tp, duration, icon)
+            deleteTimers(next_am - 1)
+          end
+        
+        elseif w_type == 'A' then
+          -- イオニックの場合の挙動が分からん
+          if available_am == 1 and next_am == 1 then
+            -- 前後ともにAM1の場合、残時間と比較する
+            if left_time < duration then
+              registerTimer(next_am, present_tp, duration, icon)
+            end
+          elseif available_am == 2 and next_am == 2 then
+            -- 前後ともにAM2の場合、発動時TPと比較する
+            if g_last_tp < present_tp then
               registerTimer(next_am, present_tp, duration, icon)
             end
           elseif available_am < next_am then
